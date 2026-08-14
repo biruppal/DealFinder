@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: dealfinder-db
+    environment:
+      POSTGRES_USER: dealfinder
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: dealfinder
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dealfinder"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: dealfinder-api
+    environment:
+      DATABASE_URL: postgresql://dealfinder:dev_password@db:5432/dealfinder
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../:/app
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: dealfinder-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: dealfinder-network
